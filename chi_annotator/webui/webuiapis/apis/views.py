@@ -146,9 +146,11 @@ def export_data(request):
         annotations = ca["annotation_data"].find({}).batch_size(50)
         result = []
         for annotation in annotations:
+            # !!!!!!!!!! 原来使用了错误的键值txt
             data = {
                 "label": annotation["label"],
-                "txt": annotation["txt"],
+                #"txt": annotation["txt"],
+                "txt": annotation["text"],
             }
             result.append(data)
         json.dump(result, f)
@@ -169,7 +171,6 @@ def load_single_unlabeled(request):
     # read file
     ca = get_mongo_client(uri='mongodb://localhost:27017/')
     text = ca["annotation_raw_data"].find_one({"labeled": False})
-
     annotation_data = AnnotationRawData(text=text.get("text"), uuid=text.get("uuid"))
     annotation_data_serializer = AnnotationRawDataSerializer(annotation_data)
 
@@ -194,7 +195,9 @@ def load_all_unlabeled(request):
     unlabeled = all_unlabeled.limit(limit).skip(limit * offset)
     result = list()
     for t in unlabeled:
-        annotation_data = AnnotationRawData(text=t.get("text"), uuid=uuid.uuid1(), dataset_uuid=t.get("dataset_uuid"))
+        # !!!!!!!!!! 原来使用了uuid.uuid1()进行随机生成
+        #annotation_data = AnnotationRawData(text=t.get("text"), uuid=uuid.uuid1(), dataset_uuid=t.get("dataset_uuid"))
+        annotation_data = AnnotationRawData(text=t.get("text"), uuid=t.get("uuid"), dataset_uuid=t.get("dataset_uuid"))
         annotation_data_serializer = AnnotationRawDataSerializer(annotation_data)
         result.append(annotation_data_serializer.data)
     response = APIResponse()
@@ -211,12 +214,19 @@ def annotate_single_unlabeled(request):
     :return:
     """
     # read file
-    text = request.POST.get("text", "")
-    label = request.POST.get("label", "")
-    uuid = request.POST.get("uuid", "")
+    # !!!!!!!!!! 原来没有对json数据结果进行正确的解析
+    if request.content_type == 'application/json':
+        json_result = json.loads(request.body)
+        text = json_result.get("text", "")
+        label = json_result.get("label", "")
+        uuid = json_result.get("uuid", "")
+    else:
+        text = request.POST.get("text", "")
+        label = request.POST.get("label", "")
+        uuid = request.POST.get("uuid", "")
 
     ca = get_mongo_client(uri='mongodb://localhost:27017/')
-
+    print(uuid)
     raw_text = ca["annotation_raw_data"].find_one({"uuid": uuid})
     if raw_text:
         ca["annotation_raw_data"].update({"uuid": uuid}, {"$set": {"labeled": True}})
